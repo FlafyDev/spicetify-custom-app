@@ -1,4 +1,3 @@
-import browserify from 'browserify'
 import fs from 'fs'
 import path from 'path'
 import { promisify } from 'util'
@@ -6,15 +5,16 @@ import glob from 'glob'
 import colors from 'colors/safe'
 import packageConfig from '../package.json'
 import { ICustomAppManifest, INewManifest } from './models/manifests'
-
+import sassPlugin from 'esbuild-sass-plugin'
+import scssModulesPlugin from 'esbuild-scss-modules-plugin'
+const esbuild = require("esbuild") // Couldn't do it with import :(
 const exec = promisify(require('child_process').exec);
-
 
 const build = async (watch: boolean) => {
   const spicetifyDirectory = await exec("spicetify -c").then((o: any) => path.dirname(o.stdout.trim()));
-  const outDirectory = path.join(spicetifyDirectory, "CustomApps/" + packageConfig.name);
+  const outDirectory = path.join(spicetifyDirectory, "CustomApps", packageConfig.name);
   const extensions = await glob.sync("./src/extensions/*(*.ts|*.tsx|*.js|*.jsx)");
-  const extensionsNewNames = extensions.map(e => path.basename(e.substring(0, e.lastIndexOf(".")) + ".js"));
+  const extensionsNewNames = extensions.map(e => e.substring(0, e.lastIndexOf(".")) + ".js");
 
   // Create the out directory if doesn't exists
   if (!fs.existsSync(outDirectory)){
@@ -29,59 +29,55 @@ const build = async (watch: boolean) => {
     icon: newManifest.icon,
     "active-icon": newManifest['active-icon'],
     subfiles: [],
-    subfiles_extension: extensionsNewNames
+    subfiles_extension: extensionsNewNames.map(e => path.basename(e))
   }
   fs.writeFileSync(path.join(outDirectory, "manifest.json"), JSON.stringify(customAppManifest, null, 2))
   
   console.log("Entering build loop...")
 
-  // Set up browserify for the custom app
-  const bCustomApp = browserify({
-    standalone: 'appModule', 
-    cache: {}, 
-    packageCache: {},
-    entries: [path.join('./src/', newManifest.main)],
-    plugin: ["tsify"],
-  })
-  if (watch) {
-    bCustomApp.plugin("watchify")
-    bCustomApp.on('update', buildCustomApp);
-  }
-  buildCustomApp();
-  
-  async function buildCustomApp() {
-    console.log("Bundling...");
-    try {
-      fs.writeFile(path.join(outDirectory, "index.js"), await streamToString(bCustomApp.bundle()).then(s => s + `
-        function render() {return appModule.render();}
-      `), err => !err || console.error(err));
-    } catch (err) {
-      console.log(colors.red("An error occurred while bundling: " + err));
-      return;
-    }
-
-    console.log(colors.green("Done building the CustomApp!"));
-  }
-
-  // Set up browserify for the extensions
-  extensions.forEach((extension, i) => {
-    const b = browserify({
-      cache: {}, 
-      packageCache: {},
-      entries: [extension],
-      plugin: ["tsify"],
-    })
-    if (watch) {
-      b.plugin("watchify")
-      b.on('update', () => buildExtension(b, extensionsNewNames[i]))
-    }
-    buildExtension(b, extensionsNewNames[i])
+  let moduleCSS = ""
+  esbuild.build({
+    entryPoints: [`./index.tsx`, ...extensions],
+    outdir: outDirectory,
+    platform: 'browser',
+    external: ['./node_modules/*'],
+    bundle: true,
+    treeShaking: false,
+    globalName: "appModule",
+    plugins: [
+      scssModulesPlugin({
+        inject: false,
+        cssCallback(
+          css: string, map: {[className: string]: string;}
+        ) {
+          moduleCSS = css
+        }
+      }),
+      sassPlugin()
+    ],
+    watch: {
+      onRebuild(error: any, result: any) {
+        if (error)
+          console.error(error)
+        else {
+          onBuild()
+          console.log(colors.green('Build succeeded'))
+        }
+      },
+    },
+  }).then(() => {
+    onBuild()
+    console.log('watching...')
   })
 
-  async function buildExtension(b: browserify.BrowserifyObject, fileName: string) {
-    console.log("Bundling...");
-    b.bundle().pipe(fs.createWriteStream(path.join(outDirectory, fileName)))
-    console.log(colors.green(`Done building ${fileName}!`));
+  function onBuild() {
+    extensionsNewNames.forEach(extension => {
+      fs.copyFileSync(path.join(outDirectory, extension), path.join(outDirectory, path.basename(extension)))
+    });
+    fs.rmSync(path.join(outDirectory, "src"), { recursive: true, force: true });
+    fs.appendFileSync(path.join(outDirectory, "index.js"), `const render=()=>appModule.render();`)
+    fs.appendFileSync(path.join(outDirectory, "index.css"), moduleCSS)
+    fs.renameSync(path.join(outDirectory, "index.css"), path.join(outDirectory, "style.css"))
   }
 }
 

@@ -1,7 +1,6 @@
 // The manifest for this project
 export interface INewManifest {
   "name": string,
-  "main": string,
   "icon": string,
   "active-icon": string,
 }

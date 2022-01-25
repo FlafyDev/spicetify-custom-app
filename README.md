@@ -3,7 +3,10 @@ STILL NEED TO BE TESTED | NOT READY YET
 
 A template for making a Spicetify Custom App with Typescript, React syntax, and NPM packages.
 
-### To test it:
+### Features
+
+
+### Usage
 ```
 spicetify config custom_apps ts-customapp
 spicetify watch -l -a
@@ -12,4 +15,6 @@ yarn run watch
 ```
 
 ### TODO
-- Make the src/css directory import css and scss files to the custom app.
+- Better example
+- Test
+- Complete feature list
