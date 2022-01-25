@@ -40,7 +40,7 @@ const build = async (watch: boolean) => {
     standalone: 'appModule', 
     cache: {}, 
     packageCache: {},
-    entries: ['./src/index.tsx'],
+    entries: [path.join('./src/', newManifest.main)],
     plugin: ["tsify"],
   })
   if (watch) {
