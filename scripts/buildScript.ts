@@ -91,7 +91,7 @@ const build = async (watch: boolean) => {
     fs.appendFileSync(path.join(outDirectory, "index.js"), `const render=()=>appModule.default();\n`);
 
     console.log("Renaming index.css...")
-    if (fs.existsSync('index.css'))
+    if (fs.existsSync(path.join(outDirectory, "index.css")))
       fs.renameSync(path.join(outDirectory, "index.css"), path.join(outDirectory, "style.css"))
     
     console.log(colors.green('Build succeeded.'));
