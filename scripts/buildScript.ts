@@ -5,9 +5,10 @@ import glob from 'glob'
 import colors from 'colors/safe'
 import packageConfig from '../package.json'
 import { ICustomAppManifest, INewManifest } from './models/manifests'
-import sassPlugin from 'esbuild-sass-plugin'
-import scssModulesPlugin from 'esbuild-scss-modules-plugin'
-const esbuild = require("esbuild") // Couldn't do it with import :(
+const esbuild = require("esbuild")
+const postCssPlugin = require("esbuild-plugin-postcss2");
+const autoprefixer = require("autoprefixer");
+
 const exec = promisify(require('child_process').exec);
 
 const build = async (watch: boolean) => {
@@ -21,73 +22,85 @@ const build = async (watch: boolean) => {
     fs.mkdirSync(outDirectory);
   }
 
-  // Generate the manifest.json
-  console.log("Generating manifest.json...")
-  const newManifest = <INewManifest>JSON.parse(fs.readFileSync("./manifest.json", 'utf-8'))
-  const customAppManifest = <ICustomAppManifest>{
-    name: newManifest.name,
-    icon: newManifest.icon,
-    "active-icon": newManifest['active-icon'],
-    subfiles: [],
-    subfiles_extension: extensionsNewNames.map(e => path.basename(e))
+  if (watch) {
+    console.log('Opening spotify with watch mode...')
+    await openSpicetify()
   }
-  fs.writeFileSync(path.join(outDirectory, "manifest.json"), JSON.stringify(customAppManifest, null, 2))
-  
-  console.log("Entering build loop...")
 
-  let moduleCSS = ""
   esbuild.build({
     entryPoints: [`./index.tsx`, ...extensions],
     outdir: outDirectory,
     platform: 'browser',
-    external: ['./node_modules/*'],
+    external: ['react', 'react-dom'],
     bundle: true,
-    treeShaking: false,
     globalName: "appModule",
     plugins: [
-      scssModulesPlugin({
-        inject: false,
-        cssCallback(
-          css: string, map: {[className: string]: string;}
-        ) {
-          moduleCSS = css
-        }
+      postCssPlugin.default({
+        plugins: [autoprefixer]
       }),
-      sassPlugin()
     ],
-    watch: {
+    watch: (watch ? {
       onRebuild(error: any, result: any) {
         if (error)
           console.error(error)
         else {
-          onBuild()
-          console.log(colors.green('Build succeeded'))
+          afterBundle();
         }
       },
-    },
-  }).then(() => {
-    onBuild()
-    console.log('watching...')
+    } : undefined)
+  }).then((r: any) => {
+    afterBundle();
+    return r;
   })
 
-  function onBuild() {
+  if (watch) {
+    console.log('watching...');
+  }
+
+  function afterBundle() {
+    // Generate the manifest.json
+    console.log("Generating manifest.json...")
+    const newManifest = <INewManifest>JSON.parse(fs.readFileSync("./manifest.json", 'utf-8'))
+    const customAppManifest = <ICustomAppManifest>{
+      name: newManifest.name,
+      icon: fs.readFileSync(path.join('./src', newManifest.icon), 'utf-8'),
+      "active-icon": fs.readFileSync(path.join('./src', newManifest.activeIcon), 'utf-8'),
+      subfiles: [],
+      subfiles_extension: extensionsNewNames.map(e => path.basename(e))
+    }
+    fs.writeFileSync(path.join(outDirectory, "manifest.json"), JSON.stringify(customAppManifest, null, 2))
+
+    console.log("Moving extensions...")
     extensionsNewNames.forEach(extension => {
       fs.copyFileSync(path.join(outDirectory, extension), path.join(outDirectory, path.basename(extension)))
     });
+    
     fs.rmSync(path.join(outDirectory, "src"), { recursive: true, force: true });
-    fs.appendFileSync(path.join(outDirectory, "index.js"), `const render=()=>appModule.render();`)
-    fs.appendFileSync(path.join(outDirectory, "index.css"), moduleCSS)
-    fs.renameSync(path.join(outDirectory, "index.css"), path.join(outDirectory, "style.css"))
+    
+    console.log("Modifying index.js...")
+    const indexJSData = fs.readFileSync(path.join(outDirectory, "index.js"), 'utf-8').split("\n");
+    const appendAbove = indexJSData.findIndex((l) => l.includes(`if (typeof require !== "undefined")`))
+    indexJSData.splice(appendAbove, 0,        `if (x === "react") return Spicetify.React`);
+    indexJSData.splice(appendAbove + 1, 0,    `if (x === "react-dom") return Spicetify.ReactDOM`);
+    indexJSData.splice(indexJSData.length, 0, `const render=()=>appModule.default();`);
+    
+    fs.writeFileSync(path.join(outDirectory, "index.js"), indexJSData.join("\n")+"\n");
+    
+    console.log("Renaming index.css...")
+    if (fs.existsSync('index.css'))
+      fs.renameSync(path.join(outDirectory, "index.css"), path.join(outDirectory, "style.css"))
+    
+    console.log(colors.green('Build succeeded.'));
   }
-}
 
-function streamToString(stream: NodeJS.ReadableStream) {
-  const chunks: any[] = [];
-  return new Promise((resolve, reject) => {
-    stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
-    stream.on('error', (err) => reject(err));
-    stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-  })
+  async function openSpicetify() {
+    const output = await exec(`spicetify config custom_apps ${packageConfig.name}`);
+    if (output.stdout.includes("Config changed")) {
+      await exec(`spicetify apply`)
+      await new Promise(r => setTimeout(r, 2000));
+    }
+    exec(`spicetify watch -l -a`);
+  }
 }
  
 export default build;

@@ -2,7 +2,7 @@
 export interface INewManifest {
   "name": string,
   "icon": string,
-  "active-icon": string,
+  "activeIcon": string,
 }
 
 // The manifest every custom app should have
