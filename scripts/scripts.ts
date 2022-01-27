@@ -11,9 +11,9 @@ const autoprefixer = require("autoprefixer");
 
 const exec = promisify(require('child_process').exec);
 
-const build = async (watch: boolean) => {
+const build = async (watch: boolean, inOutDirectory?: string) => {
   const spicetifyDirectory = await exec("spicetify -c").then((o: any) => path.dirname(o.stdout.trim()));
-  const outDirectory = path.join(spicetifyDirectory, "CustomApps", packageConfig.name);
+  const outDirectory = inOutDirectory ? inOutDirectory : path.join(spicetifyDirectory, "CustomApps", packageConfig.name);
   const extensions = await glob.sync("./src/extensions/*(*.ts|*.tsx|*.js|*.jsx)");
   const extensionsNewNames = extensions.map(e => e.substring(0, e.lastIndexOf(".")) + ".js");
   const id = makeId(12)
@@ -21,11 +21,6 @@ const build = async (watch: boolean) => {
   // Create the out directory if doesn't exists
   if (!fs.existsSync(outDirectory)){
     fs.mkdirSync(outDirectory);
-  }
-
-  if (watch) {
-    console.log('Opening spotify with watch mode...')
-    await openSpicetify()
   }
   
   esbuild.build({
@@ -86,9 +81,11 @@ const build = async (watch: boolean) => {
     jsFiles.forEach(jsFile => {
       const data = fs.readFileSync(jsFile, 'utf-8').split("\n");
       const appendAbove = data.findIndex((l) => l.includes(`if (typeof require !== "undefined")`))
-      data.splice(appendAbove, 0,        `if (x === "react") return Spicetify.React;`);
-      data.splice(appendAbove + 1, 0,    `if (x === "react-dom") return Spicetify.ReactDOM;`);
-      fs.writeFileSync(jsFile, data.join("\n")+"\n");
+      if (appendAbove !== -1) {
+        data.splice(appendAbove, 0,        `if (x === "react") return Spicetify.React;`);
+        data.splice(appendAbove + 1, 0,    `if (x === "react-dom") return Spicetify.ReactDOM;`);
+        fs.writeFileSync(jsFile, data.join("\n")+"\n");
+      }
     })
 
     console.log("Modifying index.js...")
@@ -100,26 +97,21 @@ const build = async (watch: boolean) => {
     
     console.log(colors.green('Build succeeded.'));
   }
+};
 
-  async function openSpicetify() {
-    const output = await exec(`spicetify config custom_apps ${packageConfig.name}`);
-    if (output.stdout.includes("Config changed")) {
-      await exec(`spicetify apply`)
-      await new Promise(r => setTimeout(r, 2000));
-    }
-    exec(`spicetify watch -l -a`);
-  }
-}
+const addApp = async () => {
+  await exec(`spicetify config custom_apps ${packageConfig.name}`);
+  await exec(`spicetify apply`);
+};
 
 function makeId(length: number) {
   var result           = '';
   var characters       = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
   var charactersLength = characters.length;
   for ( var i = 0; i < length; i++ ) {
-    result += characters.charAt(Math.floor(Math.random() * 
-charactersLength));
+    result += characters.charAt(Math.floor(Math.random() * charactersLength));
  }
  return result;
 }
 
-export default build;
+export { build, addApp };

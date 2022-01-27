@@ -21,12 +21,21 @@ A template for making Spicetify Custom Apps.
 - the Custom App's name in Spotify is the name in `manifest.json`
 
 ### Running
-1. [Create a repo from this repo](https://github.com/FlafyDev/spicetify-custom-app/generate)
-2. Clone the new repo to your computer
-3. Open a terminal in the new repo's folder and enter this:
+1. [Generate a repo from this repo](https://github.com/FlafyDev/spicetify-custom-app/generate)
+2. Clone your new repo to your computer
+3. Change the name in `package.json`:
+4. Open a terminal and enter this:
 ```
 yarn
-yarn run watch
+yarn run addApp
+```
+5. To build and watch the Custom App enter this in separate terminals:
+```
+yarn run build --watch
+```
+```
+spicetify apply
+spicetify watch -la
 ```
 
 ### The Template's Example
