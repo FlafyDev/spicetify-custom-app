@@ -2,10 +2,9 @@ import './css/global.scss'
 import styles from './css/app.module.scss'
 import React from 'react'
 
-class App extends React.Component<{}, {count: number, showConfetti: boolean}> {
+class App extends React.Component<{}, {count: number}> {
   state = {
     count: 0,
-    showConfetti: false,
   };
 
   stopConfettiTimeout: NodeJS.Timeout | null = null;
@@ -14,21 +13,9 @@ class App extends React.Component<{}, {count: number, showConfetti: boolean}> {
     this.setState((state) => {
       return {
         count: state.count+1,
-        showConfetti: true,
       }
     });
-
-    if (this.stopConfettiTimeout) {
-      clearTimeout(this.stopConfettiTimeout)
-      this.stopConfettiTimeout = null
-    }
-
-    this.stopConfettiTimeout = setTimeout(() => {
-      this.setState({
-        showConfetti: false,
-      });
-    }, 1000);
-  }
+  };
 
   render() {
     return <>
