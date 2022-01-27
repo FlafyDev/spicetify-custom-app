@@ -16,6 +16,7 @@ const build = async (watch: boolean) => {
   const outDirectory = path.join(spicetifyDirectory, "CustomApps", packageConfig.name);
   const extensions = await glob.sync("./src/extensions/*(*.ts|*.tsx|*.js|*.jsx)");
   const extensionsNewNames = extensions.map(e => e.substring(0, e.lastIndexOf(".")) + ".js");
+  const id = makeId(12)
 
   // Create the out directory if doesn't exists
   if (!fs.existsSync(outDirectory)){
@@ -26,17 +27,20 @@ const build = async (watch: boolean) => {
     console.log('Opening spotify with watch mode...')
     await openSpicetify()
   }
-
+  
   esbuild.build({
     entryPoints: [`./index.tsx`, ...extensions],
     outdir: outDirectory,
     platform: 'browser',
     external: ['react', 'react-dom'],
     bundle: true,
-    globalName: "appModule",
+    globalName: id,
     plugins: [
       postCssPlugin.default({
-        plugins: [autoprefixer]
+        plugins: [autoprefixer],
+        modules: {
+          generateScopedName: `[name]__[local]___[hash:base64:5]${id}`
+        }
       }),
     ],
     watch: (watch ? {
@@ -88,7 +92,7 @@ const build = async (watch: boolean) => {
     })
 
     console.log("Modifying index.js...")
-    fs.appendFileSync(path.join(outDirectory, "index.js"), `const render=()=>appModule.default();\n`);
+    fs.appendFileSync(path.join(outDirectory, "index.js"), `const render=()=>${id}.default();\n`);
 
     console.log("Renaming index.css...")
     if (fs.existsSync(path.join(outDirectory, "index.css")))
@@ -106,5 +110,16 @@ const build = async (watch: boolean) => {
     exec(`spicetify watch -l -a`);
   }
 }
- 
+
+function makeId(length: number) {
+  var result           = '';
+  var characters       = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+  var charactersLength = characters.length;
+  for ( var i = 0; i < length; i++ ) {
+    result += characters.charAt(Math.floor(Math.random() * 
+charactersLength));
+ }
+ return result;
+}
+
 export default build;
