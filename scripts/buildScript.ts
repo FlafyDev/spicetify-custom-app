@@ -40,24 +40,24 @@ const build = async (watch: boolean) => {
       }),
     ],
     watch: (watch ? {
-      onRebuild(error: any, result: any) {
+      async onRebuild(error: any, result: any) {
         if (error)
           console.error(error)
         else {
-          afterBundle();
+          await afterBundle();
         }
       },
     } : undefined)
-  }).then((r: any) => {
-    afterBundle();
+  }).then(async (r: any) => {
+    await afterBundle();
     return r;
   })
 
   if (watch) {
-    console.log('watching...');
+    console.log('Watching...');
   }
 
-  function afterBundle() {
+  async function afterBundle() {
     // Generate the manifest.json
     console.log("Generating manifest.json...")
     const newManifest = <INewManifest>JSON.parse(fs.readFileSync("./manifest.json", 'utf-8'))
@@ -77,15 +77,19 @@ const build = async (watch: boolean) => {
     
     fs.rmSync(path.join(outDirectory, "src"), { recursive: true, force: true });
     
+    console.log("Adding react and react-dom...")
+    const jsFiles = await glob.sync(path.join(outDirectory, "/*(*.ts|*.tsx|*.js|*.jsx)"));
+    jsFiles.forEach(jsFile => {
+      const data = fs.readFileSync(jsFile, 'utf-8').split("\n");
+      const appendAbove = data.findIndex((l) => l.includes(`if (typeof require !== "undefined")`))
+      data.splice(appendAbove, 0,        `if (x === "react") return Spicetify.React;`);
+      data.splice(appendAbove + 1, 0,    `if (x === "react-dom") return Spicetify.ReactDOM;`);
+      fs.writeFileSync(jsFile, data.join("\n")+"\n");
+    })
+
     console.log("Modifying index.js...")
-    const indexJSData = fs.readFileSync(path.join(outDirectory, "index.js"), 'utf-8').split("\n");
-    const appendAbove = indexJSData.findIndex((l) => l.includes(`if (typeof require !== "undefined")`))
-    indexJSData.splice(appendAbove, 0,        `if (x === "react") return Spicetify.React`);
-    indexJSData.splice(appendAbove + 1, 0,    `if (x === "react-dom") return Spicetify.ReactDOM`);
-    indexJSData.splice(indexJSData.length, 0, `const render=()=>appModule.default();`);
-    
-    fs.writeFileSync(path.join(outDirectory, "index.js"), indexJSData.join("\n")+"\n");
-    
+    fs.appendFileSync(path.join(outDirectory, "index.js"), `const render=()=>appModule.default();\n`);
+
     console.log("Renaming index.css...")
     if (fs.existsSync('index.css'))
       fs.renameSync(path.join(outDirectory, "index.css"), path.join(outDirectory, "style.css"))
