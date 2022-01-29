@@ -1,3 +1,4 @@
+# MOVED TO [Spicetify Creator](https://github.com/FlafyDev/spicetify-creator)
 # Spicetify Custom App Template
 STILL NEED TO BE TESTED | NOT READY YET
 
